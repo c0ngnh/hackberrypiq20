@@ -43,12 +43,46 @@ static uint32_t max17048_get_soc(struct max17048 *battery)
 	return (soc / 256);
 }
 
+/* * NEW FUNCTION: Determines if battery is Charging, Discharging, or Full
+ * based on the CRATE (Charge Rate) register.
+ */
+static int max17048_get_status(struct max17048 *battery)
+{
+	int32_t crate = 0;
+	int ret;
+
+	/* Read the CRATE register (0x16) */
+	ret = regmap_read(battery->regmap, MAX17048_CRATE_REG, &crate);
+	if (ret < 0)
+		return POWER_SUPPLY_STATUS_UNKNOWN;
+
+	/* * CRATE is a signed 16-bit value.
+	 * > 0 : Charging
+	 * < 0 : Discharging
+	 * ~ 0 : Not charging (or full)
+	 * * We cast to int16_t to ensure the sign is respected.
+	 */
+	if ((int16_t)crate > 10) /* Small threshold to avoid noise at 0 */
+		return POWER_SUPPLY_STATUS_CHARGING;
+	else if ((int16_t)crate < -10)
+		return POWER_SUPPLY_STATUS_DISCHARGING;
+	
+	/* If rate is near 0, check if we are full or just idle */
+	if (max17048_get_soc(battery) > 95)
+		return POWER_SUPPLY_STATUS_FULL;
+
+	return POWER_SUPPLY_STATUS_NOT_CHARGING;
+}
+
 static int max17048_get_property(struct power_supply *psy,
 				 enum power_supply_property psp,
 				 union power_supply_propval *val)
 {
 	struct max17048 *battery = power_supply_get_drvdata(psy);
 	switch (psp) {
+	case POWER_SUPPLY_PROP_STATUS: /* Added status handling */
+		val->intval = max17048_get_status(battery);
+		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
 		val->intval = max17048_get_vcell(battery);
 		break;
@@ -69,8 +103,11 @@ static int max17048_get_property(struct power_supply *psy,
 }
 
 static enum power_supply_property max17048_battery_props[] = {
-	POWER_SUPPLY_PROP_VOLTAGE_NOW, POWER_SUPPLY_PROP_CAPACITY,
-	POWER_SUPPLY_PROP_CHARGE_FULL, POWER_SUPPLY_PROP_CHARGE_NOW,
+	POWER_SUPPLY_PROP_STATUS, /* Registered the new property */
+	POWER_SUPPLY_PROP_VOLTAGE_NOW, 
+	POWER_SUPPLY_PROP_CAPACITY,
+	POWER_SUPPLY_PROP_CHARGE_FULL, 
+	POWER_SUPPLY_PROP_CHARGE_NOW,
 };
 
 static const struct power_supply_desc max17048_battery_desc = {
