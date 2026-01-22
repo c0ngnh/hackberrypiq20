@@ -1,5 +1,5 @@
 # hackberrypiq20
-battery driver and panel fix for hbp q20 with cm5
+battery driver and panel fix for hbp q20 with cm5 - battery Icon now showed on trixie by adding POWER_SUPPLY_PROP_STATUS property
 # installation
 ```bash
 sudo apt install make linux-headers-rpi-2712
